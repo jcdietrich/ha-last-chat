@@ -66,82 +66,33 @@ class LastChatSensor(SensorEntity):
         self, conversation_id: str, event_type: ChatLogEventType, data: dict[str, Any]
     ) -> None:
         """Handle chat log events."""
-        self.hass.async_create_task(
-            self._async_handle_chat_log_event(conversation_id, event_type, data)
-        )
+        if event_type == ChatLogEventType.USER_INPUT:
+            self._user_requests[conversation_id] = data.get("text")
+            return
 
-        async def _async_handle_chat_log_event(
+        if event_type == ChatLogEventType.AGENT_RESPONSE:
+            self.hass.async_create_task(
+                self._async_handle_chat_log_event(conversation_id, event_type, data)
+            )
 
-            self, conversation_id: str, event_type: ChatLogEventType, data: dict[str, Any]
+    async def _async_handle_chat_log_event(
+        self, conversation_id: str, event_type: ChatLogEventType, data: dict[str, Any]
+    ) -> None:
+        """Async handle chat log events."""
+        if conversation_id not in self._user_requests:
+            return
 
-        ) -> None:
+        self._attr_native_value = dt_util.utcnow()
+        self._attr_user_request = self._user_requests.pop(conversation_id)
 
-            """Async handle chat log events."""
+        response_data = data.get("response", {})
+        speech_data = response_data.get("speech", {}).get("plain", {})
+        self._attr_agent_response = speech_data.get("speech")
 
-            if event_type != ChatLogEventType.AGENT_RESPONSE:
+        self._attr_agent_id = data.get("agent_id")
+        self._attr_agent_name = None
+        if self._attr_agent_id:
+            agent_info = async_get_agent_info(self.hass, self._attr_agent_id)
+            self._attr_agent_name = agent_info.name if agent_info else None
 
-                return
-
-    
-
-            if conversation_id not in self._user_requests:
-
-                return
-
-    
-
-            self._attr_native_value = dt_util.utcnow()
-
-            self._attr_user_request = self._user_requests.pop(conversation_id)
-
-    
-
-            response_data = data.get("response", {})
-
-            speech_data = response_data.get("speech", {}).get("plain", {})
-
-            self._attr_agent_response = speech_data.get("speech")
-
-    
-
-            self._attr_agent_id = data.get("agent_id")
-
-            self._attr_agent_name = None
-
-            if self._attr_agent_id:
-
-                agent_info = async_get_agent_info(self.hass, self._attr_agent_id)
-
-                self._attr_agent_name = agent_info.name if agent_info else None
-
-    
-
-            self.async_write_ha_state()
-
-    
-
-        @callback
-
-        def _handle_chat_log_event(
-
-            self, conversation_id: str, event_type: ChatLogEventType, data: dict[str, Any]
-
-        ) -> None:
-
-            """Handle chat log events."""
-
-            if event_type == ChatLogEventType.USER_INPUT:
-
-                self._user_requests[conversation_id] = data.get("text")
-
-                return
-
-    
-
-            if event_type == ChatLogEventType.AGENT_RESPONSE:
-
-                self.hass.async_create_task(
-
-                    self._async_handle_chat_log_event(conversation_id, event_type, data)
-
-                )
+        self.async_write_ha_state()
