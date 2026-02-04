@@ -7,5 +7,6 @@
   "issue_tracker": "https://github.com/jcdietrich/ha-last-chat/issues",
   "codeowners": ["jcdietrich"],
   "requirements": [],
-  "dependencies": ["conversation"]
+  "dependencies": ["conversation"],
+  "config_flow": true
 }
