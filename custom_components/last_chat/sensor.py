@@ -88,7 +88,7 @@ class LastChatSensor(SensorEntity):
 
             self._attr_native_value = dt_util.utcnow()
             self._attr_user_request = self._user_requests.pop(conversation_id)
-            self._attr_agent_response = content.get("content")
+            self._attr_agent_response = content.get("text")
             self._attr_agent_id = content.get("agent_id")
 
             self._attr_agent_name = None
