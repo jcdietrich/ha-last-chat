@@ -97,7 +97,6 @@ class LastChatSensor(SensorEntity):
 
         self._attr_agent_name = None
         if self._attr_agent_id:
-            # Corrected typo: was async_get_.agent_info
             agent_info = async_get_agent_info(self.hass, self._attr_agent_id)
             self._attr_agent_name = agent_info.name if agent_info else None
         
