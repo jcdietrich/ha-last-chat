@@ -1,6 +1,7 @@
 """Sensor platform for the Last Chat integration."""
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from homeassistant.components.conversation import async_get_agent_info
@@ -16,6 +17,8 @@ from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 
+_LOGGER = logging.getLogger(__name__)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -23,6 +26,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Last Chat sensor."""
+    _LOGGER.info("Setting up Last Chat sensor.")
     async_add_entities([LastChatSensor(hass, entry)])
 
 
@@ -37,6 +41,7 @@ class LastChatSensor(SensorEntity):
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         """Initialize the sensor."""
+        _LOGGER.info("Initializing Last Chat sensor.")
         self.hass = hass
         self._entry = entry
         self._user_requests = hass.data[DOMAIN][entry.entry_id]["user_requests"]
@@ -57,6 +62,7 @@ class LastChatSensor(SensorEntity):
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to chat log events."""
+        _LOGGER.info("Subscribing to chat log events.")
         self.async_on_remove(
             async_subscribe_chat_logs(self.hass, self._handle_chat_log_event)
         )
@@ -66,6 +72,7 @@ class LastChatSensor(SensorEntity):
         self, conversation_id: str, event_type: ChatLogEventType, data: dict[str, Any]
     ) -> None:
         """Handle chat log events from the conversation component."""
+        _LOGGER.info("Event received: type=%s, data=%s", event_type, data)
         if event_type != ChatLogEventType.CONTENT_ADDED:
             return
 
@@ -73,11 +80,13 @@ class LastChatSensor(SensorEntity):
         role = content_data.get("role")
 
         if role == "user":
-            self._user_requests[conversation_id] = content_data.get("content")
+            user_text = content_data.get("content")
+            _LOGGER.info("User request received: '%s'", user_text)
+            self._user_requests[conversation_id] = user_text
             return
 
         if role == "assistant":
-            # Assistant response is in a separate event, schedule async processing
+            _LOGGER.info("Assistant response event received, scheduling async task.")
             self.hass.async_create_task(
                 self._async_process_agent_response(conversation_id, content_data)
             )
@@ -86,20 +95,23 @@ class LastChatSensor(SensorEntity):
         self, conversation_id: str, content_data: dict[str, Any]
     ) -> None:
         """Process the agent's response asynchronously."""
+        _LOGGER.info("Processing agent response for conversation_id=%s, content_data=%s", conversation_id, content_data)
         if conversation_id not in self._user_requests:
+            _LOGGER.warning("No matching user request for conversation_id=%s", conversation_id)
             return
 
-        # Pop the user request to link it to this response
         self._attr_user_request = self._user_requests.pop(conversation_id)
-
-        # The agent's response text is in the 'content' key
         self._attr_agent_response = content_data.get("content")
         self._attr_agent_id = content_data.get("agent_id")
+        _LOGGER.info("Extracted: user_request='%s', agent_response='%s', agent_id='%s'", self._attr_user_request, self._attr_agent_response, self._attr_agent_id)
         
         self._attr_agent_name = None
         if self._attr_agent_id:
+            _LOGGER.info("Fetching agent info for: %s", self._attr_agent_id)
             agent_info = async_get_agent_info(self.hass, self._attr_agent_id)
             self._attr_agent_name = agent_info.name if agent_info else None
+            _LOGGER.info("Agent name: %s", self._attr_agent_name)
         
         self._attr_native_value = dt_util.utcnow()
         self.async_write_ha_state()
+        _LOGGER.info("Sensor state updated.")
