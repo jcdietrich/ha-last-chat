@@ -122,14 +122,14 @@ class LastChatSensor(SensorEntity):
         if response_text:
             _LOGGER.info("Definitive response found for ID=%s: '%s'", conversation_id, response_text)
             self._pending_requests.pop(conversation_id, None)
-            self._update_sensor_state(conversation_id, user_request, response_text, content_data.get("agent_id"))
+            await self._update_sensor_state(conversation_id, user_request, response_text, content_data.get("agent_id"))
 
     async def _async_handle_conversation_end(self, conversation_id: str) -> None:
         """Handle the end of a conversation, cleaning up hanging requests."""
         if conversation_id in self._pending_requests:
             _LOGGER.info("Conversation ended (ID: %s) without a spoken response. Updating sensor to reflect action.", conversation_id)
             user_request = self._pending_requests.pop(conversation_id)
-            self._update_sensor_state(conversation_id, user_request, "Action Performed (no verbal response)", "conversation.home_assistant")
+            await self._update_sensor_state(conversation_id, user_request, "Action Performed (no verbal response)", "conversation.home_assistant")
 
     async def _update_sensor_state(self, conversation_id: str, user_request: str, agent_response: str, agent_id: str | None) -> None:
         """Update the sensor's state attributes and write the state."""
