@@ -1,0 +1,1 @@
+This integration provides a sensor that displays the last chat interaction in Home Assistant.
