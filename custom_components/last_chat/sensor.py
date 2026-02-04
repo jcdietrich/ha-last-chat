@@ -55,44 +55,39 @@ class LastChatSensor(SensorEntity):
             "agent_name": self._attr_agent_name,
         }
 
-    async def async_added_to_hass(self) -> None:
-        """Subscribe to chat log events."""
-        self.async_on_remove(
-            async_subscribe_chat_logs(self.hass, self._handle_chat_log_event)
-        )
-
     @callback
-    def _handle_chat_log_event(
+    def _handle_pipeline_run(
         self, conversation_id: str, event_type: ChatLogEventType, data: dict[str, Any]
     ) -> None:
         """Handle chat log events."""
-        if event_type == ChatLogEventType.USER_INPUT:
-            self._user_requests[conversation_id] = data.get("text")
+        # This is the only event type we need to listen for.
+        # It contains both the user's transcribed input and the agent's final response.
+        if event_type != ChatLogEventType.PIPELINE_RUN:
             return
 
-        if event_type == ChatLogEventType.AGENT_RESPONSE:
-            self.hass.async_create_task(
-                self._async_handle_chat_log_event(conversation_id, event_type, data)
-            )
+        # Extract user input
+        user_input = data.get("intent_input")
+        if user_input:
+            self._attr_user_request = user_input
 
-    async def _async_handle_chat_log_event(
-        self, conversation_id: str, event_type: ChatLogEventType, data: dict[str, Any]
-    ) -> None:
-        """Async handle chat log events."""
-        if conversation_id not in self._user_requests:
-            return
+        # Extract agent response
+        agent_response = data.get("intent_output", {}).get("response", {})
+        speech = agent_response.get("speech", {}).get("plain", {})
+        if speech:
+            self._attr_agent_response = speech.get("speech")
 
-        self._attr_native_value = dt_util.utcnow()
-        self._attr_user_request = self._user_requests.pop(conversation_id)
-
-        response_data = data.get("response", {})
-        speech_data = response_data.get("speech", {}).get("plain", {})
-        self._attr_agent_response = speech_data.get("speech")
-
-        self._attr_agent_id = data.get("agent_id")
-        self._attr_agent_name = None
-        if self._attr_agent_id:
+        # Extract agent details
+        agent_id = agent_response.get("details", {}).get("agent_id")
+        if agent_id:
+            self._attr_agent_id = agent_id
             agent_info = async_get_agent_info(self.hass, self._attr_agent_id)
-            self._attr_agent_name = agent_info.name if agent_info else None
-
+            self._attr_agent_name = agent_info.name if agent_info else "Unknown Agent"
+        
+        self._attr_native_value = dt_util.utcnow()
         self.async_write_ha_state()
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to chat log events."""
+        self.async_on_remove(
+            async_subscribe_chat_logs(self.hass, self._handle_pipeline_run)
+        )
