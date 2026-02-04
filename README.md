@@ -2,21 +2,22 @@
 
 This is a Home Assistant integration that provides information about the last chat interaction.
 
-## Installation
+## Setup
 
-1.  Add this repository to HACS as a custom repository (Type: Integration).
-2.  Search for "Last Chat" in HACS and install it.
-3.  Restart Home Assistant.
+1.  **Install via HACS**
+    *   Ensure you have [HACS](https://hacs.xyz/) installed.
+    *   Navigate to the HACS integration page.
+    *   Click the three dots in the top right and select "Custom repositories".
+    *   Add the URL to this repository and select the "Integration" category.
+    *   Click "Add".
+    *   The "Last Chat" integration will now be available to install. Click "Install".
+    *   Restart Home Assistant when prompted.
 
-## Configuration
-
-Add the following to your `configuration.yaml` file:
-
-```yaml
-# Example configuration.yaml entry
-last_chat:
-
-```
+2.  **Configure via UI**
+    *   Navigate to **Settings > Devices & Services**.
+    *   Click the **+ Add Integration** button.
+    *   Search for "Last Chat" and select it.
+    *   Follow the on-screen instructions to complete the setup.
 
 ## Usage
 
