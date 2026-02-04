@@ -65,39 +65,41 @@ class LastChatSensor(SensorEntity):
     def _handle_chat_log_event(
         self, conversation_id: str, event_type: ChatLogEventType, data: dict[str, Any]
     ) -> None:
-        """Handle chat log events."""
+        """Handle chat log events from the conversation component."""
         if event_type != ChatLogEventType.CONTENT_ADDED:
             return
 
-        content = data.get("content", {})
-        role = content.get("role")
+        content_data = data.get("content", {})
+        role = content_data.get("role")
 
         if role == "user":
-            self._user_requests[conversation_id] = content.get("content")
+            self._user_requests[conversation_id] = content_data.get("content")
             return
 
         if role == "assistant":
+            # Assistant response is in a separate event, schedule async processing
             self.hass.async_create_task(
-                self._async_process_agent_response(conversation_id, data)
+                self._async_process_agent_response(conversation_id, content_data)
             )
 
     async def _async_process_agent_response(
-        self, conversation_id: str, data: dict[str, Any]
+        self, conversation_id: str, content_data: dict[str, Any]
     ) -> None:
-        """Async process agent response."""
+        """Process the agent's response asynchronously."""
         if conversation_id not in self._user_requests:
             return
 
-        self._attr_native_value = dt_util.utcnow()
+        # Pop the user request to link it to this response
         self._attr_user_request = self._user_requests.pop(conversation_id)
 
-        content = data.get("content", {})
-        self._attr_agent_response = content.get("content")
-        self._attr_agent_id = content.get("agent_id")
-
+        # The agent's response text is in the 'content' key
+        self._attr_agent_response = content_data.get("content")
+        self._attr_agent_id = content_data.get("agent_id")
+        
         self._attr_agent_name = None
         if self._attr_agent_id:
             agent_info = async_get_agent_info(self.hass, self._attr_agent_id)
             self._attr_agent_name = agent_info.name if agent_info else None
         
+        self._attr_native_value = dt_util.utcnow()
         self.async_write_ha_state()
