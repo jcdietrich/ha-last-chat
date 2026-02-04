@@ -91,7 +91,9 @@ class LastChatSensor(SensorEntity):
             self._attr_agent_response = content.get("content")
             self._attr_agent_id = content.get("agent_id")
 
-            agent_info = await async_get_agent_info(self.hass, self._attr_agent_id)
-            self._attr_agent_name = agent_info.name if agent_info else None
+            self._attr_agent_name = None
+            if self._attr_agent_id:
+                agent_info = async_get_agent_info(self.hass, self._attr_agent_id)
+                self._attr_agent_name = agent_info.name if agent_info else None
 
             self.async_write_ha_state()
