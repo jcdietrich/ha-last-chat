@@ -55,39 +55,37 @@ class LastChatSensor(SensorEntity):
             "agent_name": self._attr_agent_name,
         }
 
-    @callback
-    def _handle_pipeline_run(
-        self, conversation_id: str, event_type: ChatLogEventType, data: dict[str, Any]
-    ) -> None:
-        """Handle chat log events."""
-        # This is the only event type we need to listen for.
-        # It contains both the user's transcribed input and the agent's final response.
-        if event_type != ChatLogEventType.PIPELINE_RUN:
-            return
-
-        # Extract user input
-        user_input = data.get("intent_input")
-        if user_input:
-            self._attr_user_request = user_input
-
-        # Extract agent response
-        agent_response = data.get("intent_output", {}).get("response", {})
-        speech = agent_response.get("speech", {}).get("plain", {})
-        if speech:
-            self._attr_agent_response = speech.get("speech")
-
-        # Extract agent details
-        agent_id = agent_response.get("details", {}).get("agent_id")
-        if agent_id:
-            self._attr_agent_id = agent_id
-            agent_info = async_get_agent_info(self.hass, self._attr_agent_id)
-            self._attr_agent_name = agent_info.name if agent_info else "Unknown Agent"
-        
-        self._attr_native_value = dt_util.utcnow()
-        self.async_write_ha_state()
-
     async def async_added_to_hass(self) -> None:
         """Subscribe to chat log events."""
         self.async_on_remove(
-            async_subscribe_chat_logs(self.hass, self._handle_pipeline_run)
+            async_subscribe_chat_logs(self.hass, self._handle_content_added)
         )
+
+    @callback
+    def _handle_content_added(
+        self, conversation_id: str, event_type: ChatLogEventType, data: dict[str, Any]
+    ) -> None:
+        """Handle chat log events."""
+        if event_type != ChatLogEventType.CONTENT_ADDED:
+            return
+
+        content = data.get("content", {})
+        role = content.get("role")
+
+        if role == "user":
+            self._user_requests[conversation_id] = content.get("content")
+        elif role == "assistant":
+            if conversation_id not in self._user_requests:
+                return
+
+            self._attr_native_value = dt_util.utcnow()
+            self._attr_user_request = self._user_requests.pop(conversation_id)
+            self._attr_agent_response = content.get("content")
+            self._attr_agent_id = content.get("agent_id")
+
+            self._attr_agent_name = None
+            if self._attr_agent_id:
+                agent_info = async_get_.agent_info(self.hass, self._attr_agent_id)
+                self._attr_agent_name = agent_info.name if agent_info else None
+            
+            self.async_write_ha_state()
