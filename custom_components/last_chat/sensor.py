@@ -85,8 +85,9 @@ class LastChatSensor(SensorEntity):
             self._user_requests[conversation_id] = user_text
             return
 
-        if role == "assistant":
-            _LOGGER.info("Assistant response event received, scheduling async task.")
+        # The final spoken response can come from a tool_result or a final assistant event
+        if role == "tool_result" or (role == "assistant" and "content" in content_data):
+            _LOGGER.info("Agent response event received, scheduling async task.")
             self.hass.async_create_task(
                 self._async_process_agent_response(conversation_id, content_data)
             )
@@ -100,18 +101,36 @@ class LastChatSensor(SensorEntity):
             _LOGGER.warning("No matching user request for conversation_id=%s", conversation_id)
             return
 
-        self._attr_user_request = self._user_requests.pop(conversation_id)
-        self._attr_agent_response = content_data.get("content")
-        self._attr_agent_id = content_data.get("agent_id")
-        _LOGGER.info("Extracted: user_request='%s', agent_response='%s', agent_id='%s'", self._attr_user_request, self._attr_agent_response, self._attr_agent_id)
-        
-        self._attr_agent_name = None
-        if self._attr_agent_id:
-            _LOGGER.info("Fetching agent info for: %s", self._attr_agent_id)
-            agent_info = async_get_agent_info(self.hass, self._attr_agent_id)
-            self._attr_agent_name = agent_info.name if agent_info else None
-            _LOGGER.info("Agent name: %s", self._attr_agent_name)
-        
-        self._attr_native_value = dt_util.utcnow()
-        self.async_write_ha_state()
-        _LOGGER.info("Sensor state updated.")
+        role = content_data.get("role")
+        response_text = None
+
+        if role == "tool_result":
+            tool_result = content_data.get("tool_result", {})
+            speech = tool_result.get("speech", {}).get("plain", {})
+            response_text = speech.get("speech")
+        elif role == "assistant":
+            response_text = content_data.get("content")
+
+        # Only update if we have a definitive text response
+        if response_text:
+            _LOGGER.info("Found definitive response: '%s'", response_text)
+            self._attr_user_request = self._user_requests.pop(conversation_id)
+            self._attr_agent_response = response_text
+            
+            # Agent ID might be in different places
+            agent_id = content_data.get("agent_id")
+            if agent_id:
+                self._attr_agent_id = agent_id
+            
+            self._attr_agent_name = None
+            if self._attr_agent_id:
+                _LOGGER.info("Fetching agent info for: %s", self._attr_agent_id)
+                agent_info = async_get_agent_info(self.hass, self._attr_agent_id)
+                self._attr_agent_name = agent_info.name if agent_info else None
+                _LOGGER.info("Agent name: %s", self._attr_agent_name)
+            
+            self._attr_native_value = dt_util.utcnow()
+            self.async_write_ha_state()
+            _LOGGER.info("Sensor state updated.")
+        else:
+            _LOGGER.info("No definitive response text found in this event, waiting for next event.")
